@@ -33,20 +33,36 @@ def main() -> int:
         return 1
 
     out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+    except OSError as exc:
+        print(f"cannot create output directory {out_dir}: {exc}", file=sys.stderr)
+        return 1
     target = os.path.join(out_dir, "entry.txt")
 
     # Atomic write: temp file in the same directory, then replace.
     tmp = target + ".tmp"
-    with open(tmp, "wb") as fh:
-        fh.write(data)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, target)
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+    except OSError as exc:
+        print(f"cannot write entry to {target}: {exc}", file=sys.stderr)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return 1
 
     # Re-read and verify the bytes are exactly the word, no newline.
-    with open(target, "rb") as fh:
-        written = fh.read()
+    try:
+        with open(target, "rb") as fh:
+            written = fh.read()
+    except OSError as exc:
+        print(f"cannot re-read entry at {target}: {exc}", file=sys.stderr)
+        return 1
     if written != data:
         print(f"verify failed: wrote {written!r}, expected {data!r}", file=sys.stderr)
         return 1
